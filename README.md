@@ -1,6 +1,6 @@
-# Increased mutation accumulation during fetal development in Down syndrome
+# Down syndrome cells show increased mutation load during fetal development
 
-Scripts written for the paper: Increased mutation accumulation during fetal development in Down syndrome
+Scripts written for the paper: Down syndrome cells show increased mutation load during fetal development
 
 A description of the analyses performed by these scripts can be found in the paper.
 
