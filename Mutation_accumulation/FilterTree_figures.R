@@ -2369,8 +2369,31 @@ di_tri_mat = read.table("~/surfdrive/Shared/Projects/Freek/Freek_trees/mutpatter
 mut_mat = cbind(fetal_adult_mat$Adult, di_tri_mat)
 colnames(mut_mat) = c("post_infant", "d21_hspc", "t21_hspc")
 
+cosmic_sig_fname = "~/surfdrive/Shared/Boxtel_General/Data/Sigs/SBS/sigProfiler_SBS_working_signatures_incl_hspc.txt"
+signatures = read.table(cosmic_sig_fname, sep = "\t", header = T)
+signatures = as.matrix(signatures[,-c(1,2)])
+signatures = signatures[,c("SBS1", "SBS5", "HSPC")]
 
 
+refit_out = fit_to_signatures_selection(mut_mat, signatures, max_delta = 0)
+
+contri = refit_out$fit_res$contribution
+contri[is.na(contri)] = 0
+contri = prop.table(contri, 2)
+contri_tb = contri %>% 
+    as.data.frame() %>% 
+    rownames_to_column("Signature") %>% 
+    tidyr::gather(key = "Sample", value = "Rel_Contribution", -Signature)
+
+rel_non_stacked_bar_fig = ggplot(contri_tb, aes(x = fct_rev(Signature), y = Rel_Contribution, fill = Signature)) +
+    geom_bar(stat = "identity") +
+    facet_grid(Sample ~ .) +
+    theme_classic() +
+    labs(x = "Signature", y = "Contribution") +
+    theme(text = element_text(size = 20)) +
+    coord_flip(ylim = c(0,1)) +
+    scale_y_continuous(labels = scales::percent)
+ggsave("~/surfdrive/Shared/Projects/Freek/Freek_trees/mutpatterns/revision1_5b.pdf", rel_non_stacked_bar_fig)
 #
 ####__________________Make pca of all the data_____________####
 #Create directory for mutational patterns analyses
