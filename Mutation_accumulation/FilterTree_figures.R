@@ -1431,7 +1431,9 @@ for (fetus in unique(overview_samples$fetus)){
     
     vcf_l = lapply(vcf_fnames, function(x) readVcf(x, genome = "hg19"))
     
-    vcf = do.call(rbind, vcf_l) %>% sort()
+    vcf = do.call(rbind, vcf_l) %>%
+        sort() %>%
+        unique()
     writeVcf(vcf, paste0(out_dir_base, fetus, "/", fetus, "_complete.vcf"))
     gr = granges(vcf)
     bed = tibble("CHROM" = as.vector(seqnames(gr)), "START" = start(gr)-1, "END" = end(gr))
@@ -2347,15 +2349,27 @@ print(cos_heat_fig)
 print(cos_heat_fig2)
 dev.off()
 
-#Make figure 3a of manuscript
-divstri_types = read_tsv("~/hpc/pmc_vanboxtel/projects/Freek_trees/mutpatterns/di_vs_tri_inclewart_noOS1B21_type_occur_ungrouped.txt")
-fetalvsadult_types = read_tsv("~/hpc/pmc_vanboxtel/projects/Freek_trees/mutpatterns/fetalvsadult_type_occur_ungrouped.txt")
-types = rbind(divstri_types, fetalvsadult_types) %>% dplyr::select(-experiment)
-group = factor(c("T21", rep("D21", 3), "T21", "T21", "D21", "D21", "T21", rep("Fetal HSPC", 3), rep("Post-infant HSPC", 18)), levels = c("Post-infant HSPC", "Fetal HSPC", "D21", "T21"))
-fig = plot_spectrum(types, CT = T, by = group) + theme_classic()
-pdf("~/hpc/pmc_vanboxtel/projects/Freek_trees/mutpatterns/fig3a.pdf")
-fig
-dev.off()
+# #Make figure 3a of manuscript
+# divstri_types = read_tsv("~/hpc/pmc_vanboxtel/projects/Freek_trees/mutpatterns/di_vs_tri_inclewart_noOS1B21_type_occur_ungrouped.txt")
+# fetalvsadult_types = read_tsv("~/hpc/pmc_vanboxtel/projects/Freek_trees/mutpatterns/fetalvsadult_type_occur_ungrouped.txt")
+# types = rbind(divstri_types, fetalvsadult_types) %>% dplyr::select(-experiment)
+# group = factor(c("T21", rep("D21", 3), "T21", "T21", "D21", "D21", "T21", rep("Fetal HSPC", 3), rep("Post-infant HSPC", 18)), levels = c("Post-infant HSPC", "Fetal HSPC", "D21", "T21"))
+# fig = plot_spectrum(types, CT = T, by = group) + theme_classic()
+# pdf("~/hpc/pmc_vanboxtel/projects/Freek_trees/mutpatterns/fig3a.pdf")
+# fig
+# dev.off()
+
+#Make figure 5b of revision
+fetal_adult_mat = read.table("~/surfdrive/Shared/Projects/Freek/Freek_trees/mutpatterns/fetalvsadult_combined_mut_mat.txt", 
+                             sep = "\t",
+                             stringsAsFactors = F)
+di_tri_mat = read.table("~/surfdrive/Shared/Projects/Freek/Freek_trees/mutpatterns/not_bulk_uniq_blood_di_vs_tri_noOS1B21_combined_mut_mat.txt",
+                        sep = "\t",
+                        stringsAsFactors = F)
+mut_mat = cbind(fetal_adult_mat$Adult, di_tri_mat)
+colnames(mut_mat) = c("post_infant", "d21_hspc", "t21_hspc")
+
+
 
 #
 ####__________________Make pca of all the data_____________####
@@ -2896,3 +2910,36 @@ pdf(paste0(out_dir_base, "telomeres/lme_divstri.pdf"))
 tel_dot_fig
 tel_line_fig
 dev.off()
+
+
+# Make table of exonic genes ----------------------------------------------
+
+get_exon_table = function(vcf){
+    ann = info(vcf)$ANN %>%
+        as.list()
+    ann[elementNROWS(ann) == 0] = ""
+    ann = purrr::map_chr(ann, str_c, collapse = ";")
+    coding_f = str_detect(ann, "synonymous_variant|missense_variant|stop_gained|stop_lost|stop_gained|start_lost|stop_retained_variant|splice_acceptor_variant|splice_donor_variant|splice_region_variant|protein_altering_variant|incomplete_terminal_codon_variant|coding_sequence_variant|NMD_transcript_variant")
+    ann_exon = ann[coding_f]
+    ann_l = str_split(ann_exon, pattern = "\\|")
+    effect_type = purrr::map_chr(ann_l, 2) #Missense, nonnsense ect.
+    effect = purrr::map_chr(ann_l, 3)
+    gene = purrr::map_chr(ann_l, 4)
+    gr = granges(vcf)
+    gr$ALT = gr$ALT %>% unlist() %>% as.vector()
+    tb = gr %>% 
+        as.data.frame() %>% 
+        as_tibble() %>% 
+        dplyr::filter(coding_f) %>% 
+        dplyr::select(seqnames, start, end, REF, ALT) %>% 
+        dplyr::mutate(gene = gene, effect = effect, effect_type = effect_type)
+    return(tb)
+}
+
+fetuses = unique(overview_samples$fetus)
+vcf_fnames = str_c("~/hpc/pmc_vanboxtel/projects/Freek_trees/", fetuses, "/", fetuses, "_complete.vcf")
+vcf_l = purrr::map(vcf_fnames, readVcf)
+exon_tb = purrr::map(vcf_l, get_exon_table) %>% 
+    set_names(fetuses) %>% 
+    bind_rows(.id = fetus)
+write_tsv(exon_tb, str_c(out_dir_base, "exon_muts.txt"))
