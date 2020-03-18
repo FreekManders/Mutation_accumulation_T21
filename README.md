@@ -1,6 +1,6 @@
 # Down syndrome cells show increased mutation load during fetal development
 
-Scripts written for the paper: Down syndrome cells show increased mutation load during fetal development
+Scripts written for the paper: Mutation accumulation and developmental lineages in normal and Down syndrome human fetal haematopoiesis
 
 A description of the analyses performed by these scripts can be found in the paper.
 
