@@ -2964,5 +2964,5 @@ vcf_fnames = str_c("~/hpc/pmc_vanboxtel/projects/Freek_trees/", fetuses, "/", fe
 vcf_l = purrr::map(vcf_fnames, readVcf)
 exon_tb = purrr::map(vcf_l, get_exon_table) %>% 
     set_names(fetuses) %>% 
-    bind_rows(.id = fetus)
+    bind_rows(.id = "fetus")
 write_tsv(exon_tb, str_c(out_dir_base, "exon_muts.txt"))
