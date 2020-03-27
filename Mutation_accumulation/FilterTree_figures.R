@@ -1421,7 +1421,8 @@ for (fetus_name in unique(overview_samples$fetus)){
 
 # Create vcf and bed with all muts ----------------------------------------
 for (fetus in unique(overview_samples$fetus)){
-    overview_fetus = overview_samples %>% dplyr::filter(fetus == !!fetus)
+    overview_fetus = overview_samples %>% 
+        dplyr::filter(fetus == !!fetus)
     vcf_fnames1 = overview_fetus$indel_uniq
     vcf_fnames2 = overview_fetus$indel_shared
     vcf_fnames3 = overview_fetus$unique_vcf
@@ -2937,25 +2938,54 @@ dev.off()
 
 # Make table of exonic genes ----------------------------------------------
 
+get_samples_gt = function(gt_mut){
+    gt_f = gt_mut == "0/1" | gt_mut == "1/1"
+    present_samples = names(gt_mut)[gt_f]
+    present_samples = str_c(present_samples, collapse = ";")
+    return(present_samples)
+}
+
 get_exon_table = function(vcf){
+    
+    #Get gene annotation
     ann = info(vcf)$ANN %>%
         as.list()
     ann[elementNROWS(ann) == 0] = ""
     ann = purrr::map_chr(ann, str_c, collapse = ";")
+    
+    #Filter for coding muts
     coding_f = str_detect(ann, "synonymous_variant|missense_variant|stop_gained|stop_lost|stop_gained|start_lost|stop_retained_variant|splice_acceptor_variant|splice_donor_variant|splice_region_variant|protein_altering_variant|incomplete_terminal_codon_variant|coding_sequence_variant|NMD_transcript_variant")
+    if (!sum(coding_f)){
+        return(NULL)
+    }
     ann_exon = ann[coding_f]
+    
+    #Get info for gene table
     ann_l = str_split(ann_exon, pattern = "\\|")
     effect_type = purrr::map_chr(ann_l, 2) #Missense, nonnsense ect.
     effect = purrr::map_chr(ann_l, 3)
     gene = purrr::map_chr(ann_l, 4)
     gr = granges(vcf)
-    gr$ALT = gr$ALT %>% unlist() %>% as.vector()
+    gr$ALT = gr$ALT %>% 
+        unlist() %>% 
+        as.vector()
+    
+    #Determine samples in which a cell was called.
+    vcf = vcf[coding_f]
+    gt = geno(vcf)$GT
+    called_samples = purrr::map_chr(seq(1, nrow(gt)), ~get_samples_gt(gt[.x,]))
+    
+    #Combine all info into a tibble
     tb = gr %>% 
         as.data.frame() %>% 
         as_tibble() %>% 
-        dplyr::filter(coding_f) %>% 
+        dplyr::filter(coding_f) %>%
         dplyr::select(seqnames, start, end, REF, ALT) %>% 
-        dplyr::mutate(gene = gene, effect = effect, effect_type = effect_type)
+        dplyr::mutate(gene = gene, 
+                      effect = effect, 
+                      effect_type = effect_type, 
+                      called_samples = called_samples) %>% 
+        dplyr::filter(str_detect(called_samples, "-L-", negate = T)) #Remove liver clones, because these were not really used for the manuscript
     return(tb)
 }
 

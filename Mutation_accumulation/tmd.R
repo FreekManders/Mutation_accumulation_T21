@@ -57,32 +57,7 @@ gr_tmd = grl$TAM
 saveRDS(gr_tmd, "~/hpc/pmc_vanboxtel/projects/Freek_trees/mutpatterns/tmd_gr.rds")
 
 #Count muts
-counts_tmd = grl$TAM$patient %>% table() %>% enframe(name = "patient", value = "total_muts")
-
-ages_patients = tibble("patient" = paste0("00", 1:4), "age_diag_tam" = rep(0.728, 4), "age_diag_amkl" = c(2.89, 3.23, 3.31, 1.23)) %>% mutate(diag_diff = age_diag_amkl - age_diag_tam)
-
-chroms_auto = paste0("chr", 1:22)
-grl_auto = grl
-seqlevels(grl_auto, pruning.mode = "fine") = chroms_auto
-counts_tmd_auto = grl_auto$TAM$patient %>% table() %>% enframe(name = "patient", value = "total_muts")
-counts_tmd_auto %<>% dplyr::mutate(total_muts = ifelse(patient == "003", total_muts - 7, total_muts)) #remove subclones in patient 003
-#counts = tmd_df %>% dplyr::group_by(patient, disease) %>% dplyr::summarise(count = n())
-
-
-
 nr_muts_tb = read_tsv("~/hpc/pmc_vanboxtel/projects/Freek_trees/count_muts_extended.txt")
-counts = nr_muts_tb %>% dplyr::filter(!grepl("SI|Si", sample)) %>% dplyr::filter(fetus_name %in% c("NR1", "NR2", "MH2")) %>% dplyr::select(Donor = fetus_name, total_muts = nr_total_snv_notbulk_auto, Age = age_year)
-weeksbyyear = 52.177457
-age_at_birth = 38 / weeksbyyear
-#muts_counts_axel = read_tsv(mut_counts_axel_fname) %>% unique() %>% dplyr::filter(Tissue == "Blood") %>% dplyr::select(person = Donor, Age, norm_snvs = norm_muts) %>% mutate(Age = Age + age_at_birth)
-combined_counts_all = counts
-combined_counts_all %<>% mutate("age_cat" = ifelse(Age < 0.6, "fetal", "Post-infant"))
-combined_counts_all$age_cat = factor(combined_counts_all$age_cat, levels = c("Post-infant", "fetal"))
-
-
-combined_counts = combined_counts_all
-
-
 counts_tmd = grl$TAM$patient %>% table() %>% enframe(name = "Donor", value = "total_muts") %>% dplyr::mutate(Type = "TMD")
 counts_fetuses = nr_muts_tb %>% dplyr::filter(trisomy == "21" & celltype == "HSC") %>% dplyr::select(Donor = fetus_name, total_muts = nr_total_snv_notbulk) %>% dplyr::mutate(Type = "T21 Fetal clones")
 all_counts = rbind(counts_tmd, counts_fetuses) %>% 
@@ -132,24 +107,46 @@ for (fetus in unique(overview_samples$fetus)){
 
 #Create an exon table
 get_exon_table = function(vcf){
+    
+    #Get gene annotation
     ann = info(vcf)$ANN %>%
         as.list()
     ann[elementNROWS(ann) == 0] = ""
     ann = purrr::map_chr(ann, str_c, collapse = ";")
+    
+    #Filter for coding muts
     coding_f = str_detect(ann, "synonymous_variant|missense_variant|stop_gained|stop_lost|stop_gained|start_lost|stop_retained_variant|splice_acceptor_variant|splice_donor_variant|splice_region_variant|protein_altering_variant|incomplete_terminal_codon_variant|coding_sequence_variant|NMD_transcript_variant")
+    if (!sum(coding_f)){
+        return(NULL)
+    }
     ann_exon = ann[coding_f]
+    
+    #Get info for gene table
     ann_l = str_split(ann_exon, pattern = "\\|")
     effect_type = purrr::map_chr(ann_l, 2) #Missense, nonnsense ect.
     effect = purrr::map_chr(ann_l, 3)
     gene = purrr::map_chr(ann_l, 4)
     gr = granges(vcf)
-    gr$ALT = gr$ALT %>% unlist() %>% as.vector()
+    gr$ALT = gr$ALT %>% 
+        unlist() %>% 
+        as.vector()
+    
+    #Determine samples in which a cell was called.
+    vcf = vcf[coding_f]
+    gt = geno(vcf)$GT
+    called_samples = purrr::map_chr(seq(1, nrow(gt)), ~get_samples_gt(gt[.x,]))
+    
+    #Combine all info into a tibble
     tb = gr %>% 
         as.data.frame() %>% 
         as_tibble() %>% 
-        dplyr::filter(coding_f) %>% 
+        dplyr::filter(coding_f) %>%
         dplyr::select(seqnames, start, end, REF, ALT) %>% 
-        dplyr::mutate(gene = gene, effect = effect, effect_type = effect_type)
+        dplyr::mutate(gene = gene, 
+                      effect = effect, 
+                      effect_type = effect_type, 
+                      called_samples = called_samples) %>% 
+        dplyr::filter(str_detect(called_samples, "-L-", negate = T)) #Remove liver clones, because these were not really used for the manuscript
     return(tb)
 }
 
