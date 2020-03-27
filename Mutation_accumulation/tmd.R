@@ -130,4 +130,33 @@ for (fetus in unique(overview_samples$fetus)){
     write.table(bed, bed_fname, append = T, quote = F, sep = "\t", col.names = F, row.names = F)
 }
 
+#Create an exon table
+get_exon_table = function(vcf){
+    ann = info(vcf)$ANN %>%
+        as.list()
+    ann[elementNROWS(ann) == 0] = ""
+    ann = purrr::map_chr(ann, str_c, collapse = ";")
+    coding_f = str_detect(ann, "synonymous_variant|missense_variant|stop_gained|stop_lost|stop_gained|start_lost|stop_retained_variant|splice_acceptor_variant|splice_donor_variant|splice_region_variant|protein_altering_variant|incomplete_terminal_codon_variant|coding_sequence_variant|NMD_transcript_variant")
+    ann_exon = ann[coding_f]
+    ann_l = str_split(ann_exon, pattern = "\\|")
+    effect_type = purrr::map_chr(ann_l, 2) #Missense, nonnsense ect.
+    effect = purrr::map_chr(ann_l, 3)
+    gene = purrr::map_chr(ann_l, 4)
+    gr = granges(vcf)
+    gr$ALT = gr$ALT %>% unlist() %>% as.vector()
+    tb = gr %>% 
+        as.data.frame() %>% 
+        as_tibble() %>% 
+        dplyr::filter(coding_f) %>% 
+        dplyr::select(seqnames, start, end, REF, ALT) %>% 
+        dplyr::mutate(gene = gene, effect = effect, effect_type = effect_type)
+    return(tb)
+}
 
+fetuses = unique(overview_samples$fetus)
+vcf_fnames = str_c("~/hpc/pmc_vanboxtel/projects/Freek_TMD/", fetuses, "/", fetuses, "_complete.vcf")
+vcf_l = purrr::map(vcf_fnames, readVcf)
+exon_tb = purrr::map(vcf_l, get_exon_table) %>% 
+    set_names(fetuses) %>% 
+    bind_rows(.id = "fetus")
+write_tsv(exon_tb, str_c(owndata_dir, "exon_muts.txt"))
