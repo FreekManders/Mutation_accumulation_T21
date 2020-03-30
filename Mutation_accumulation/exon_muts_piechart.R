@@ -71,4 +71,14 @@ print(fig_l)
 dev.off()
 
 
+exon_df = exon_tb %>% 
+    dplyr::filter(trisomy != "TMD") %>% 
+    dplyr::group_by(trisomy, effect_type) %>% 
+    dplyr::summarise(n = n()) %>% 
+    tidyr::spread(key = "effect_type", value = "n", fill = 0) %>% 
+    column_to_rownames(var = "trisomy")
 
+chisq_res = exon_df %>% 
+    chisq.test(simulate.p.value = T) %>% 
+    tidy() %>% 
+    write_tsv("exon_types_chisq.txt")
