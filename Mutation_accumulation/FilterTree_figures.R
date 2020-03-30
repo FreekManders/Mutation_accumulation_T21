@@ -2395,7 +2395,33 @@ rel_non_stacked_bar_fig = ggplot(contri_tb, aes(x = fct_rev(Signature), y = Rel_
     coord_flip(ylim = c(0,1)) +
     scale_y_continuous(labels = scales::percent)
 ggsave("~/surfdrive/Shared/Projects/Freek/Freek_trees/mutpatterns/revision1_5b.pdf", rel_non_stacked_bar_fig)
-#
+
+#Make TMD signatures supplemental figure
+mut_mat = read.table("~/surfdrive/Shared/Projects/Freek/Freek_trees/mutpatterns/not_bulk_uniq_blood_tmd_vs_tri_noOS1B21_combined_mut_mat.txt", 
+                             sep = "\t",
+                             stringsAsFactors = F)
+refit_out = fit_to_signatures_selection(mut_mat, signatures, max_delta = 0)
+
+contri = refit_out$fit_res$contribution
+contri[is.na(contri)] = 0
+contri = prop.table(contri, 2)
+contri_tb = contri %>% 
+    as.data.frame() %>% 
+    rownames_to_column("Signature") %>% 
+    tidyr::gather(key = "Sample", value = "Rel_Contribution", -Signature)
+
+rel_non_stacked_bar_fig = ggplot(contri_tb, aes(x = fct_rev(Signature), y = Rel_Contribution, fill = Signature)) +
+    geom_bar(stat = "identity") +
+    facet_grid(Sample ~ .) +
+    theme_classic() +
+    labs(x = "Signature", y = "Contribution") +
+    theme(text = element_text(size = 20)) +
+    coord_flip(ylim = c(0,1)) +
+    scale_y_continuous(labels = scales::percent)
+ggsave("~/surfdrive/Shared/Projects/Freek/Freek_trees/mutpatterns/revision1_supplemental_tmdsig.pdf", rel_non_stacked_bar_fig)
+
+
+
 ####__________________Make pca of all the data_____________####
 #Create directory for mutational patterns analyses
 out_dir_mut = paste0(out_dir_base, "mutpatterns/")
